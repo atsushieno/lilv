@@ -1010,20 +1010,13 @@ lilv_world_load_plugin_classes(LilvWorld* world)
 
 		SordNode* parent = sord_get(
 			world->model, class_node, world->uris.rdfs_subClassOf, NULL, NULL);
-		if (parent && sord_node_get_type(parent) != SORD_URI) {
-			continue;
-		}
 
 		SordNode* label = sord_get(
 			world->model, class_node, world->uris.rdfs_label, NULL, NULL);
-		if (!label) {
-			sord_node_free(world->world, parent);
-			continue;
-		}
 
 		LilvPluginClass* pclass = lilv_plugin_class_new(
 			world, parent, class_node,
-			(const char*)sord_node_get_string(label));
+			label ? (const char*)sord_node_get_string(label) : "");
 		if (pclass) {
 			zix_tree_insert((ZixTree*)world->plugin_classes, pclass, NULL);
 		}
