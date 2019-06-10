@@ -1041,7 +1041,7 @@ LILV_API void
 lilv_plugin_write_description(LilvWorld*        world,
                               const LilvPlugin* plugin,
                               const LilvNode*   base_uri,
-                              FILE*             plugin_file);
+                              void*             plugin_file);
 
 /**
    Write a manifest entry for `plugin` to `manifest_file`.
@@ -1053,7 +1053,7 @@ LILV_API void
 lilv_plugin_write_manifest_entry(LilvWorld*        world,
                                  const LilvPlugin* plugin,
                                  const LilvNode*   base_uri,
-                                 FILE*             manifest_file,
+                                 void*             manifest_file,
                                  const char*       plugin_file_path);
 
 /**

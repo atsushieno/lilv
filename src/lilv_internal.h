@@ -27,6 +27,7 @@ extern "C" {
 #include "serd/serd.h"
 #include "sord/sord.h"
 #include "zix/tree.h"
+#include "abstract_io.h"
 
 #include <float.h>
 #include <stddef.h>

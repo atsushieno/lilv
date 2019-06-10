@@ -218,6 +218,7 @@ def build(bld):
         src/util.c
         src/world.c
         src/zix/tree.c
+        src/abstract_io.c
     '''.split()
 
     lib      = []

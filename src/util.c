@@ -53,7 +53,6 @@ CreateSymbolicLink(LPCTSTR linkpath, LPCTSTR targetpath, DWORD flags)
 }
 #    endif
 #else
-#    include <dirent.h>
 #    include <unistd.h>
 #endif
 
@@ -563,12 +562,12 @@ lilv_dir_for_each(const char* path,
 	}
 	free(pat);
 #else
-	DIR* dir = opendir(path);
+	void* dir = abstract_opendir(path);
 	if (dir) {
-		for (struct dirent* entry; (entry = readdir(dir));) {
-			f(path, entry->d_name, data);
+		for (void* entry; (entry = abstract_readdir(dir));) {
+			f(path, abstract_dirent_getname(entry), data);
 		}
-		closedir(dir);
+		abstract_closedir(dir);
 	}
 #endif
 }

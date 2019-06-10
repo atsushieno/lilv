@@ -1057,14 +1057,14 @@ new_lv2_env(const SerdNode* base)
 }
 
 static void
-maybe_write_prefixes(SerdWriter* writer, SerdEnv* env, FILE* file)
+maybe_write_prefixes(SerdWriter* writer, SerdEnv* env, void* file)
 {
-	fseek(file, 0, SEEK_END);
-	if (ftell(file) == 0) {
+	abstract_fseek(file, 0, SEEK_END);
+	if (abstract_ftell(file) == 0) {
 		serd_env_foreach(
 			env, (SerdPrefixSink)serd_writer_set_prefix, writer);
 	} else {
-		fprintf(file, "\n");
+		abstract_fprintf(file, "\n");
 	}
 }
 
@@ -1072,7 +1072,7 @@ LILV_API void
 lilv_plugin_write_description(LilvWorld*        world,
                               const LilvPlugin* plugin,
                               const LilvNode*   base_uri,
-                              FILE*             plugin_file)
+                              void*             plugin_file)
 {
 	const LilvNode* subject   = lilv_plugin_get_uri(plugin);
 	const uint32_t  num_ports = lilv_plugin_get_num_ports(plugin);
@@ -1111,7 +1111,7 @@ LILV_API void
 lilv_plugin_write_manifest_entry(LilvWorld*        world,
                                  const LilvPlugin* plugin,
                                  const LilvNode*   base_uri,
-                                 FILE*             manifest_file,
+                                 void*             manifest_file,
                                  const char*       plugin_file_path)
 {
 	const LilvNode* subject = lilv_plugin_get_uri(plugin);
