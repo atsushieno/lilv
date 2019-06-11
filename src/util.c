@@ -562,13 +562,7 @@ lilv_dir_for_each(const char* path,
 	}
 	free(pat);
 #else
-	void* dir = abstract_opendir(path);
-	if (dir) {
-		for (void* entry; (entry = abstract_readdir(dir));) {
-			f(path, abstract_dirent_getname(entry), data);
-		}
-		abstract_closedir(dir);
-	}
+	abstract_dir_for_each(path,data,f);
 #endif
 }
 

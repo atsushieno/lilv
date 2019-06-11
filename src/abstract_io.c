@@ -11,7 +11,6 @@
 #include "abstract_io.h"
 
 #if ANDROID
-#include <sys/mman.h>
 
 AAssetManager *current_asset_manager;
 
@@ -24,7 +23,7 @@ void abstract_set_io_context (void* ioContext)
 
 int abstract_ftell(void *stream)
 {
-	auto asset = (AAsset *) stream;
+	AAsset *asset = (AAsset*) stream;
 	return AAsset_getLength(asset) - AAsset_getRemainingLength(asset);
 }
 
@@ -33,23 +32,17 @@ int abstract_fseek(void* stream, long offset, int origin)
 	return AAsset_seek ((AAsset*) stream, offset, origin);
 }
 
-void* abstract_readdir(const char* path)
+void abstract_dir_for_each(const char* path,
+                  void*       data,
+                  void (*f)(const char* path, const char* name, void* data))
 {
-}
-
-const char* abstract_dirent_getname(void* dirent)
-{
-	
-}
-
-void abstract_closedir(void* dir)
-{
-	AAssetDir_close((AAssetDir*) dir);
-}
-
-void* abstract_opendir(const char* path)
-{
-	return AAsset_opendir(mgr, path);
+	auto dir = AAssetManager_openDir(current_asset_manager, path);
+	do {
+		auto i = AAssetDir_getNextFileName(dir);
+		if (!i)
+			break;
+		f(path, i, data);
+	} while (true);
 }
 
 
@@ -72,25 +65,18 @@ int abstract_fseek(void* stream, long offset, int origin)
 	return fseek(stream, offset, origin);
 }
 
-void* abstract_readdir(void *dir)
-{
-	return readdir((DIR*) dir);
-}
 
-const char* abstract_dirent_getname(void* ent)
+void abstract_dir_for_each(const char* path,
+                  void*       data,
+                  void (*f)(const char* path, const char* name, void* data))
 {
-	return ((struct dirent*) ent)->d_name;
+	void* dir = opendir(path);
+	if (dir) {
+		for (struct dirent* entry; (entry = readdir(dir));) {
+			f(path, entry->d_name, data);
+		}
+		closedir(dir);
+	}
 }
-
-void abstract_closedir(void* dir)
-{
-	closedir(dir);
-}
-
-void* abstract_opendir(const char* path)
-{
-	return opendir(path);
-}
-
 
 #endif
