@@ -36,13 +36,13 @@ void abstract_dir_for_each(const char* path,
                   void*       data,
                   void (*f)(const char* path, const char* name, void* data))
 {
-	auto dir = AAssetManager_openDir(current_asset_manager, path);
+	AAssetDir *dir = AAssetManager_openDir(current_asset_manager, path);
 	do {
-		auto i = AAssetDir_getNextFileName(dir);
-		if (!i)
+		char* file = AAssetDir_getNextFileName(dir);
+		if (!file)
 			break;
-		f(path, i, data);
-	} while (true);
+		f(path, file, data);
+	} while (1);
 }
 
 
