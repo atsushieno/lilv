@@ -1064,7 +1064,7 @@ maybe_write_prefixes(SerdWriter* writer, SerdEnv* env, void* file)
 		serd_env_foreach(
 			env, (SerdPrefixSink)serd_writer_set_prefix, writer);
 	} else {
-		abstract_fprintf(file, "\n");
+		fprintf(file, "\n");
 	}
 }
 

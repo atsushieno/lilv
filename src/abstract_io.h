@@ -6,9 +6,6 @@
 /* nothing for desktop, AAssetManager* for Android */
 void abstract_set_io_context (void* ioContext);
 
-/* common to serd */
-int abstract_fprintf (void* stream, const char *format, ...);
-
 /* lilv-specific */
 int abstract_ftell(void *stream);
 int abstract_fseek(void* stream, long offset, int origin);

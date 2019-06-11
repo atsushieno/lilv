@@ -2,6 +2,7 @@
 #if ANDROID
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
+#include <android/log.h>
 #else
 #include <stdio.h>
 #include <dirent.h>
@@ -10,6 +11,7 @@
 #include "abstract_io.h"
 
 #if ANDROID
+#include <sys/mman.h>
 
 AAssetManager *current_asset_manager;
 
@@ -17,6 +19,8 @@ void abstract_set_io_context (void* ioContext)
 {
 	current_asset_manager = (AAssetManager*) ioContext;
 }
+
+
 
 int abstract_ftell(void *stream)
 {
@@ -52,12 +56,8 @@ void* abstract_opendir(const char* path)
 #else
 
 
-
-int abstract_fprintf (void* stream, const char *format, ...)
+void abstract_set_io_context (void* ioContext)
 {
-    va_list ap;
-    va_start (ap, format);
-    return fprintf (stream, format, ap);
 }
 
 
