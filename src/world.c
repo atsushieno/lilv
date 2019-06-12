@@ -918,11 +918,15 @@ static void
 load_dir_entry(const char* dir, const char* name, void* data)
 {
 	LilvWorld* world = (LilvWorld*)data;
+#if ANDROID
+	char*     path = strdup(name);
+#else
 	if (!strcmp(name, ".") || !strcmp(name, "..")) {
 		return;
 	}
 
 	char*     path = lilv_strjoin(dir, "/", name, "/", NULL);
+#endif
 	SerdNode  suri = serd_node_new_file_uri((const uint8_t*)path, 0, 0, true);
 	LilvNode* node = lilv_new_uri(world, (const char*)suri.buf);
 

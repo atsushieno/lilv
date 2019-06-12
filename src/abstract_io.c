@@ -36,6 +36,18 @@ void abstract_dir_for_each(const char* path,
                   void*       data,
                   void (*f)(const char* path, const char* name, void* data))
 {
+	#if 1
+	/* Due to lack of feature in Android Assets API, it is impossible to
+	 * enumerate directories at run time (either in NDK or SDK).
+	 * Therefore, we do things differently - we just pass all the plugins
+	 * in LV2_PATH, and each entry represents a loadable plugin.
+	 * So here, we only validate that the asset path exists and directly load it*/
+	AAssetDir *dir = AAssetManager_openDir(current_asset_manager, path);
+	if (dir) {
+		f(NULL, path, data);
+		AAssetDir_close(dir);
+	}
+	#else
 	AAssetDir *dir = AAssetManager_openDir(current_asset_manager, path);
 	do {
 		char* file = AAssetDir_getNextFileName(dir);
@@ -43,6 +55,7 @@ void abstract_dir_for_each(const char* path,
 			break;
 		f(path, file, data);
 	} while (1);
+	#endif
 }
 
 
