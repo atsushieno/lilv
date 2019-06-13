@@ -47,7 +47,12 @@ lilv_lib_open(LilvWorld*               world,
 	}
 
 	dlerror();
-	void* lib = dlopen(lib_path, RTLD_NOW);
+#if ANDROID
+	const char *dl_path = strrchr(lib_path, '/') + 1;
+#else
+	const char *dl_path = lib_path;
+#endif
+	void* lib = dlopen(dl_path, RTLD_NOW);
 	if (!lib) {
 		LILV_ERRORF("Failed to open library %s (%s)\n", lib_path, dlerror());
 		serd_free(lib_path);
