@@ -56,6 +56,7 @@ static inline const char* dlerror(void) { return "Unknown error"; }
 #include "sord/sord.h"
 
 #include "zix/tree.h"
+#include "abstract_io.h"
 
 #include "lilv_config.h"
 #include "lilv/lilv.h"
