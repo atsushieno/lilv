@@ -12,7 +12,7 @@ from waflib.extras import autowaf
 # major increment <=> incompatible changes
 # minor increment <=> compatible changes (additions)
 # micro increment <=> no interface changes
-LILV_VERSION       = '0.24.5'
+LILV_VERSION       = '0.24.7'
 LILV_MAJOR_VERSION = '0'
 
 # Mandatory waf variables
@@ -20,6 +20,11 @@ APPNAME = 'lilv'        # Package name for waf dist
 VERSION = LILV_VERSION  # Package version for waf dist
 top     = '.'           # Source directory
 out     = 'build'       # Build directory
+
+# Release variables
+uri          = 'http://drobilla.net/sw/lilv'
+dist_pattern = 'http://download.drobilla.net/lilv-%d.%d.%d.tar.bz2'
+post_tags    = ['Hacking', 'LAD', 'LV2', 'Lilv']
 
 test_plugins = [
     'bad_syntax',
@@ -43,7 +48,7 @@ def options(ctx):
     ctx.add_flags(
         opt,
         {'no-utils':           'do not build command line utilities',
-         'bindings':           'build python bindings',
+         'no-bindings':        'do not build python bindings',
          'dyn-manifest':       'build support for dynamic manifests',
          'no-bash-completion': 'do not install bash completion script',
          'static':             'build static library',
@@ -62,11 +67,11 @@ def configure(conf):
     except:
         pass
 
-    if Options.options.bindings:
+    if not Options.options.no_bindings:
         try:
             conf.load('python', cache=True)
-            conf.check_python_headers()
-            autowaf.define(conf, 'LILV_PYTHON', 1);
+            conf.check_python_version((2,6,0))
+            conf.env.LILV_PYTHON = 1
         except:
             Logs.warn('Failed to configure Python (%s)\n' % sys.exc_info()[1])
 
@@ -83,16 +88,11 @@ def configure(conf):
     if not conf.env.BUILD_SHARED and not conf.env.BUILD_STATIC:
         conf.fatal('Neither a shared nor a static build requested')
 
-    autowaf.check_pkg(conf, 'lv2', uselib_store='LV2',
-                      atleast_version='1.16.0', mandatory=True)
-    autowaf.check_pkg(conf, 'serd-0', uselib_store='SERD',
-                      atleast_version='0.30.0', mandatory=True)
-    autowaf.check_pkg(conf, 'sord-0', uselib_store='SORD',
-                      atleast_version='0.14.0', mandatory=True)
-    autowaf.check_pkg(conf, 'sratom-0', uselib_store='SRATOM',
-                      atleast_version='0.4.0', mandatory=True)
-    autowaf.check_pkg(conf, 'sndfile', uselib_store='SNDFILE',
-                      atleast_version='1.0.0', mandatory=False)
+    conf.check_pkg('lv2 >= 1.17.0', uselib_store='LV2')
+    conf.check_pkg('serd-0 >= 0.30.0', uselib_store='SERD')
+    conf.check_pkg('sord-0 >= 0.14.0', uselib_store='SORD')
+    conf.check_pkg('sratom-0 >= 0.4.0', uselib_store='SRATOM')
+    conf.check_pkg('sndfile >= 1.0.0', uselib_store='SNDFILE', mandatory=False)
 
     defines = ['_POSIX_C_SOURCE=200809L', '_BSD_SOURCE', '_DEFAULT_SOURCE']
     if conf.env.DEST_OS == 'darwin':
@@ -102,38 +102,38 @@ def configure(conf):
     if conf.env.DEST_OS == 'darwin' or conf.env.DEST_OS == 'win32':
         rt_lib = []
 
-    autowaf.check_function(conf, 'c', 'lstat',
-                           header_name = ['sys/stat.h'],
-                           defines     = defines,
-                           define_name = 'HAVE_LSTAT',
-                           mandatory   = False)
+    conf.check_function('c', 'lstat',
+                        header_name = ['sys/stat.h'],
+                        defines     = defines,
+                        define_name = 'HAVE_LSTAT',
+                        mandatory   = False)
 
-    autowaf.check_function(conf, 'c', 'flock',
-                           header_name = 'sys/file.h',
-                           defines     = defines,
-                           define_name = 'HAVE_FLOCK',
-                           mandatory   = False)
+    conf.check_function('c', 'flock',
+                        header_name = 'sys/file.h',
+                        defines     = defines,
+                        define_name = 'HAVE_FLOCK',
+                        mandatory   = False)
 
-    autowaf.check_function(conf, 'c', 'fileno',
-                           header_name = 'stdio.h',
-                           defines     = defines,
-                           define_name = 'HAVE_FILENO',
-                           mandatory   = False)
+    conf.check_function('c', 'fileno',
+                        header_name = 'stdio.h',
+                        defines     = defines,
+                        define_name = 'HAVE_FILENO',
+                        mandatory   = False)
 
-    autowaf.check_function(conf, 'c', 'clock_gettime',
-                           header_name  = ['sys/time.h','time.h'],
-                           defines      = ['_POSIX_C_SOURCE=200809L'],
-                           define_name  = 'HAVE_CLOCK_GETTIME',
-                           uselib_store = 'CLOCK_GETTIME',
-                           lib          = rt_lib,
-                           mandatory    = False)
+    conf.check_function('c', 'clock_gettime',
+                        header_name  = ['sys/time.h','time.h'],
+                        defines      = ['_POSIX_C_SOURCE=200809L'],
+                        define_name  = 'HAVE_CLOCK_GETTIME',
+                        uselib_store = 'CLOCK_GETTIME',
+                        lib          = rt_lib,
+                        mandatory    = False)
 
     conf.check_cc(define_name = 'HAVE_LIBDL',
                   lib         = 'dl',
                   mandatory   = False)
 
     if Options.options.dyn_manifest:
-        autowaf.define(conf, 'LILV_DYN_MANIFEST', 1)
+        conf.define('LILV_DYN_MANIFEST', 1)
 
     lilv_path_sep = ':'
     lilv_dir_sep  = '/'
@@ -141,8 +141,8 @@ def configure(conf):
         lilv_path_sep = ';'
         lilv_dir_sep = '\\\\'
 
-    autowaf.define(conf, 'LILV_PATH_SEP', lilv_path_sep)
-    autowaf.define(conf, 'LILV_DIR_SEP',  lilv_dir_sep)
+    conf.define('LILV_PATH_SEP', lilv_path_sep)
+    conf.define('LILV_DIR_SEP',  lilv_dir_sep)
 
     # Set default LV2 path
     lv2_path = Options.options.default_lv2_path
@@ -164,20 +164,20 @@ def configure(conf):
             lv2_path = lilv_path_sep.join(['~/.lv2',
                                            '/usr/%s/lv2' % libdirname,
                                            '/usr/local/%s/lv2' % libdirname])
-    autowaf.define(conf, 'LILV_DEFAULT_LV2_PATH', lv2_path)
+    conf.define('LILV_DEFAULT_LV2_PATH', lv2_path)
 
     autowaf.set_lib_env(conf, 'lilv', LILV_VERSION)
     conf.write_config_header('lilv_config.h', remove=False)
 
+    conf.undefine('LILV_DEFAULT_LV2_PATH')  # Cmd line errors with VC++
+
     autowaf.display_summary(
         conf,
-        {'Default LV2_PATH':         conf.env.LILV_DEFAULT_LV2_PATH,
+        {'Default LV2_PATH':         lv2_path,
          'Utilities':                bool(conf.env.BUILD_UTILS),
          'Unit tests':               bool(conf.env.BUILD_TESTS),
-         'Dynamic manifest support': bool(conf.env.LILV_DYN_MANIFEST),
-         'Python bindings':          conf.is_defined('LILV_PYTHON')})
-
-    conf.undefine('LILV_DEFAULT_LV2_PATH')  # Cmd line errors with VC++
+         'Dynamic manifest support': conf.is_defined('LILV_DYN_MANIFEST'),
+         'Python bindings':          bool(conf.env.LILV_PYTHON)})
 
 def build_util(bld, name, defines, libs=''):
     obj = bld(features     = 'c cprogram',
@@ -266,7 +266,7 @@ def build(bld):
                   uselib          = 'SERD SORD SRATOM LV2')
 
     # Python bindings
-    if bld.is_defined('LILV_PYTHON'):
+    if bld.env.LILV_PYTHON:
         bld(features     = 'subst',
             is_copy      = True,
             source       = 'bindings/python/lilv.py',
@@ -378,7 +378,7 @@ def build(bld):
                       cxxflags     = test_cflags,
                       linkflags    = test_linkflags)
 
-        if bld.is_defined('LILV_PYTHON'):
+        if bld.env.LILV_PYTHON:
             # Copy Python unittest files
             for i in [ 'test_api.py' ]:
                 bld(features     = 'subst',
@@ -423,9 +423,11 @@ def build(bld):
             obj = build_util(bld, 'utils/lv2apply', defines, 'SNDFILE')
 
         # lv2bench (less portable than other utilities)
-        if bld.is_defined('HAVE_CLOCK_GETTIME') and not bld.env.STATIC_PROGS:
+        if (bld.env.DEST_OS != 'win32' and
+            bld.is_defined('HAVE_CLOCK_GETTIME') and
+            not bld.env.STATIC_PROGS):
             obj = build_util(bld, 'utils/lv2bench', defines)
-            if bld.env.DEST_OS != 'win32' and bld.env.DEST_OS != 'darwin':
+            if bld.env.DEST_OS != 'darwin':
                 obj.lib = ['rt']
 
     # Documentation
@@ -441,19 +443,14 @@ def build(bld):
 
     bld.add_post_fun(autowaf.run_ldconfig)
 
-def upload_docs(ctx):
-    import glob
-    os.system('rsync -ravz --delete -e ssh build/doc/html/ drobilla@drobilla.net:~/drobilla.net/docs/lilv/')
-    for page in glob.glob('doc/*.[1-8]'):
-        os.system('soelim %s | pre-grohtml troff -man -wall -Thtml | post-grohtml > build/%s.html' % (page, page))
-        os.system('rsync -avz --delete -e ssh build/%s.html drobilla@drobilla.net:~/drobilla.net/man/' % page)
-
 def test(tst):
     with tst.group('unit') as check:
         check(['./test/lilv_test'])
         if tst.is_defined('LILV_CXX'):
             check(['./test/lilv_cxx_test'])
-        if tst.is_defined('LILV_PYTHON'):
+
+    if tst.env.LILV_PYTHON:
+        with tst.group('python') as check:
             check(['python', '-m', 'unittest', 'discover', 'bindings/'])
 
     with tst.group('plugin') as check:
@@ -479,14 +476,3 @@ def lint(ctx):
            "-readability-else-after-return\" " +
            "$(find .. -name '*.c')")
     subprocess.call(cmd, cwd='build', shell=True)
-
-def posts(ctx):
-    path = str(ctx.path.abspath())
-    autowaf.news_to_posts(
-        os.path.join(path, 'NEWS'),
-        {'title'        : 'Lilv',
-         'description'  : autowaf.get_blurb(os.path.join(path, 'README')),
-         'dist_pattern' : 'http://download.drobilla.net/lilv-%s.tar.bz2'},
-        { 'Author' : 'drobilla',
-          'Tags'   : 'Hacking, LAD, LV2, Lilv' },
-        os.path.join(out, 'posts'))
