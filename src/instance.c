@@ -32,6 +32,7 @@ lilv_plugin_instantiate(const LilvPlugin*        plugin,
 {
 	lilv_plugin_load_if_necessary(plugin);
 	if (plugin->parse_errors) {
+		LILV_ERROR("Parse errors occurred");
 		return NULL;
 	}
 
@@ -39,6 +40,10 @@ lilv_plugin_instantiate(const LilvPlugin*        plugin,
 	const LilvNode* const lib_uri    = lilv_plugin_get_library_uri(plugin);
 	const LilvNode* const bundle_uri = lilv_plugin_get_bundle_uri(plugin);
 	if (!lib_uri || !bundle_uri) {
+		if (!lib_uri)
+			LILV_ERROR("Missing lib specification");
+		if (!bundle_uri)
+			LILV_ERROR("Missing bundle specification");
 		return NULL;
 	}
 
@@ -47,6 +52,9 @@ lilv_plugin_instantiate(const LilvPlugin*        plugin,
 
 	LilvLib* lib = lilv_lib_open(plugin->world, lib_uri, bundle_path, features);
 	if (!lib) {
+		LILV_ERRORF("failed to open library: %s in %s",
+		           lilv_node_as_uri(lib_uri),
+				   bundle_path);
 		serd_free(bundle_path);
 		return NULL;
 	}
