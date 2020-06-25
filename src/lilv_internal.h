@@ -426,6 +426,21 @@ lilv_dlfunc(void* handle, const char* symbol)
 static const LV2_Feature* const dman_features = { NULL };
 #endif
 
+#if ANDROID
+#include <android/log.h>
+#define LILV_ERROR(str)       __android_log_print(ANDROID_LOG_ERROR, "lilv", "%s(): " str, \
+                                      __func__)
+#define LILV_ERRORF(fmt, ...) __android_log_print(ANDROID_LOG_ERROR, "lilv", "%s(): " fmt, \
+                                      __func__, __VA_ARGS__)
+#define LILV_WARN(str)        __android_log_print(ANDROID_LOG_WARN, "lilv", "%s(): " str, \
+                                      __func__)
+#define LILV_WARNF(fmt, ...)  __android_log_print(ANDROID_LOG_WARN, "lilv", "%s(): " fmt, \
+                                      __func__, __VA_ARGS__)
+#define LILV_NOTE(str)        __android_log_print(ANDROID_LOG_INFO, "lilv", "%s(): " str, \
+                                      __func__)
+#define LILV_NOTEF(fmt, ...)  __android_log_print(ANDROID_LOG_INFO, "lilv", "%s(): " fmt, \
+                                      __func__, __VA_ARGS__)
+#else
 #define LILV_ERROR(str)       fprintf(stderr, "%s(): error: " str, \
                                       __func__)
 #define LILV_ERRORF(fmt, ...) fprintf(stderr, "%s(): error: " fmt, \
@@ -438,6 +453,7 @@ static const LV2_Feature* const dman_features = { NULL };
                                       __func__)
 #define LILV_NOTEF(fmt, ...)  fprintf(stderr, "%s(): note: " fmt, \
                                       __func__, __VA_ARGS__)
+#endif
 
 #ifdef __cplusplus
 }
