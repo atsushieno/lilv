@@ -105,6 +105,7 @@ bench(const LilvPlugin* p, uint32_t sample_count, uint32_t block_size)
 		if (!lilv_node_equals(feature, urid_map)) {
 			fprintf(stderr, "<%s> requires feature <%s>, skipping\n",
 			        uri, lilv_node_as_uri(feature));
+			free(seq_out);
 			free(buf);
 			uri_table_destroy(&uri_table);
 			return 0.0;
@@ -115,6 +116,7 @@ bench(const LilvPlugin* p, uint32_t sample_count, uint32_t block_size)
 	if (!instance) {
 		fprintf(stderr, "Failed to instantiate <%s>\n",
 		        lilv_node_as_uri(lilv_plugin_get_uri(p)));
+		free(seq_out);
 		free(buf);
 		uri_table_destroy(&uri_table);
 		return 0.0;
@@ -146,7 +148,7 @@ bench(const LilvPlugin* p, uint32_t sample_count, uint32_t block_size)
 			} else if (lilv_port_is_a(p, port, lv2_OutputPort)) {
 				lilv_instance_connect_port(instance, index, out);
 			} else {
-				fprintf(stderr, "<%s> port %d neither input nor output, skipping\n",
+				fprintf(stderr, "<%s> port %u neither input nor output, skipping\n",
 				        uri, index);
 				lilv_instance_free(instance);
 				free(seq_out);
@@ -162,7 +164,7 @@ bench(const LilvPlugin* p, uint32_t sample_count, uint32_t block_size)
 				lilv_instance_connect_port(instance, index, seq_out);
 			}
 		} else {
-			fprintf(stderr, "<%s> port %d has unknown type, skipping\n",
+			fprintf(stderr, "<%s> port %u has unknown type, skipping\n",
 			        uri, index);
 			lilv_instance_free(instance);
 			free(seq_out);
@@ -188,17 +190,19 @@ bench(const LilvPlugin* p, uint32_t sample_count, uint32_t block_size)
 
 	lilv_instance_deactivate(instance);
 	lilv_instance_free(instance);
+	free(controls);
+	free(maxes);
+	free(mins);
 	free(seq_out);
 
 	uri_table_destroy(&uri_table);
 
 	if (full_output) {
-		printf("%d %d ", block_size, sample_count);
+		printf("%u %u ", block_size, sample_count);
 	}
 	printf("%lf %s\n", elapsed, uri);
 
 	free(buf);
-	free(controls);
 	return elapsed;
 }
 
@@ -252,6 +256,7 @@ main(int argc, char** argv)
 	if (plugin_uri_str) {
 		LilvNode* uri = lilv_new_uri(world, plugin_uri_str);
 		bench(lilv_plugins_get_by_uri(plugins, uri), sample_count, block_size);
+		lilv_node_free(uri);
 	} else {
 		LILV_FOREACH(plugins, i, plugins) {
 			bench(lilv_plugins_get(plugins, i), sample_count, block_size);

@@ -14,6 +14,7 @@
   OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 */
 
+#include "filesystem.h"
 #include "lilv_config.h"
 #include "lilv_internal.h"
 
@@ -33,15 +34,15 @@
 
 #include <assert.h>
 #include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static int
 lilv_world_drop_graph(LilvWorld* world, const SordNode* graph);
 
-LILV_API LilvWorld*
+LilvWorld*
 lilv_world_new(void)
 {
 	LilvWorld* world = (LilvWorld*)calloc(1, sizeof(LilvWorld));
@@ -125,7 +126,7 @@ fail:
 	return NULL;
 }
 
-LILV_API void
+void
 lilv_world_free(LilvWorld* world)
 {
 	if (!world) {
@@ -182,7 +183,7 @@ lilv_world_free(LilvWorld* world)
 	free(world);
 }
 
-LILV_API void
+void
 lilv_world_set_option(LilvWorld*      world,
                       const char*     uri,
                       const LilvNode* value)
@@ -206,7 +207,7 @@ lilv_world_set_option(LilvWorld*      world,
 	LILV_WARNF("Unrecognized or invalid option `%s'\n", uri);
 }
 
-LILV_API LilvNodes*
+LilvNodes*
 lilv_world_find_nodes(LilvWorld*      world,
                       const LilvNode* subject,
                       const LilvNode* predicate,
@@ -234,12 +235,32 @@ lilv_world_find_nodes(LilvWorld*      world,
 	                                      object ? object->node : NULL);
 }
 
-LILV_API LilvNode*
+LilvNode*
 lilv_world_get(LilvWorld*      world,
                const LilvNode* subject,
                const LilvNode* predicate,
                const LilvNode* object)
 {
+	if (!object) {
+		// TODO: Improve performance (see lilv_plugin_get_one)
+		SordIter* stream = sord_search(world->model,
+		                               subject   ? subject->node : NULL,
+		                               predicate ? predicate->node : NULL,
+		                               NULL,
+		                               NULL);
+
+		LilvNodes* nodes =
+		    lilv_nodes_from_stream_objects(world, stream, SORD_OBJECT);
+
+		if (nodes) {
+			LilvNode* value = lilv_node_duplicate(lilv_nodes_get_first(nodes));
+			lilv_nodes_free(nodes);
+			return value;
+		}
+
+		return NULL;
+	}
+
 	SordNode* snode = sord_get(world->model,
 	                           subject   ? subject->node   : NULL,
 	                           predicate ? predicate->node : NULL,
@@ -268,7 +289,7 @@ lilv_world_ask_internal(LilvWorld*      world,
 	return sord_ask(world->model, subject, predicate, object, NULL);
 }
 
-LILV_API bool
+bool
 lilv_world_ask(LilvWorld*      world,
                const LilvNode* subject,
                const LilvNode* predicate,
@@ -325,7 +346,7 @@ const uint8_t*
 lilv_world_blank_node_prefix(LilvWorld* world)
 {
 	static char str[32];
-	snprintf(str, sizeof(str), "%d", world->n_read_files++);
+	snprintf(str, sizeof(str), "%u", world->n_read_files++);
 	return (const uint8_t*)str;
 }
 
@@ -619,7 +640,7 @@ lilv_world_load_dyn_manifest(LilvWorld*      world,
 			lilv_world_add_plugin(world, plug, manifest, desc, bundle_node);
 		}
 		if (desc->refs == 0) {
-			free(desc);
+			lilv_dynmanifest_free(desc);
 		}
 		sord_iter_free(p);
 		sord_free(plugins);
@@ -629,6 +650,23 @@ lilv_world_load_dyn_manifest(LilvWorld*      world,
 	sord_free(model);
 #endif  // LILV_DYN_MANIFEST
 }
+
+#ifdef LILV_DYN_MANIFEST
+void
+lilv_dynmanifest_free(LilvDynManifest* dynmanifest)
+{
+	typedef int (*CloseFunc)(LV2_Dyn_Manifest_Handle);
+	CloseFunc close_func = (CloseFunc)lilv_dlfunc(dynmanifest->lib,
+	                                              "lv2_dyn_manifest_close");
+	if (close_func) {
+		close_func(dynmanifest->handle);
+	}
+
+	dlclose(dynmanifest->lib);
+	lilv_node_free(dynmanifest->bundle);
+	free(dynmanifest);
+}
+#endif  // LILV_DYN_MANIFEST
 
 LilvNode*
 lilv_world_get_manifest_uri(LilvWorld* world, const LilvNode* bundle_uri)
@@ -700,7 +738,7 @@ get_version(LilvWorld* world, SordModel* model, const LilvNode* subject)
 	return version;
 }
 
-LILV_API void
+void
 lilv_world_load_bundle(LilvWorld* world, const LilvNode* bundle_uri)
 {
 	if (!lilv_node_is_uri(bundle_uri)) {
@@ -855,7 +893,7 @@ lilv_world_drop_graph(LilvWorld* world, const SordNode* graph)
 static int
 lilv_world_unload_file(LilvWorld* world, const LilvNode* file)
 {
-	ZixTreeIter* iter;
+	ZixTreeIter* iter = NULL;
 	if (!zix_tree_find((ZixTree*)world->loaded_files, file, &iter)) {
 		zix_tree_remove((ZixTree*)world->loaded_files, iter);
 		return 0;
@@ -863,7 +901,7 @@ lilv_world_unload_file(LilvWorld* world, const LilvNode* file)
 	return 1;
 }
 
-LILV_API int
+int
 lilv_world_unload_bundle(LilvWorld* world, const LilvNode* bundle_uri)
 {
 	if (!bundle_uri) {
@@ -918,17 +956,15 @@ static void
 load_dir_entry(const char* dir, const char* name, void* data)
 {
 	LilvWorld* world = (LilvWorld*)data;
-#if ANDROID
-	char*     path = strdup(name);
-#else
-	if (!strcmp(name, ".") || !strcmp(name, "..")) {
-		return;
-	}
-
-	char*     path = lilv_strjoin(dir, "/", name, "/", NULL);
-#endif
 	SerdNode  suri = serd_node_new_file_uri((const uint8_t*)path, 0, 0, true);
 	LilvNode* node = lilv_new_uri(world, (const char*)suri.buf);
+#if ANDROID
+	char*      path = strdup(name);
+#else
+	char*      path  = lilv_strjoin(dir, "/", name, "/", NULL);
+#endif
+	SerdNode   suri  = serd_node_new_file_uri((const uint8_t*)path, 0, 0, true);
+	LilvNode*  node  = lilv_new_uri(world, (const char*)suri.buf);
 
 	lilv_world_load_bundle(world, node);
 	lilv_node_free(node);
@@ -1038,7 +1074,7 @@ lilv_world_load_plugin_classes(LilvWorld* world)
 	sord_iter_free(classes);
 }
 
-LILV_API void
+void
 lilv_world_load_all(LilvWorld* world)
 {
 	const char* lv2_path = world->opt.lv2_path;
@@ -1075,12 +1111,12 @@ lilv_world_load_all(LilvWorld* world)
 SerdStatus
 lilv_world_load_file(LilvWorld* world, SerdReader* reader, const LilvNode* uri)
 {
-	ZixTreeIter* iter;
+	ZixTreeIter* iter = NULL;
 	if (!zix_tree_find((ZixTree*)world->loaded_files, uri, &iter)) {
 		return SERD_FAILURE;  // File has already been loaded
 	}
 
-	size_t               uri_len;
+	size_t               uri_len = 0;
 	const uint8_t* const uri_str = sord_node_get_string_counted(
 		uri->node, &uri_len);
 	if (strncmp((const char*)uri_str, "file:", 5)) {
@@ -1102,7 +1138,7 @@ lilv_world_load_file(LilvWorld* world, SerdReader* reader, const LilvNode* uri)
 	return SERD_SUCCESS;
 }
 
-LILV_API int
+int
 lilv_world_load_resource(LilvWorld*      world,
                          const LilvNode* resource)
 {
@@ -1137,7 +1173,7 @@ lilv_world_load_resource(LilvWorld*      world,
 	return n_read;
 }
 
-LILV_API int
+int
 lilv_world_unload_resource(LilvWorld*      world,
                            const LilvNode* resource)
 {
@@ -1173,25 +1209,25 @@ lilv_world_unload_resource(LilvWorld*      world,
 	return n_dropped;
 }
 
-LILV_API const LilvPluginClass*
+const LilvPluginClass*
 lilv_world_get_plugin_class(const LilvWorld* world)
 {
 	return world->lv2_plugin_class;
 }
 
-LILV_API const LilvPluginClasses*
+const LilvPluginClasses*
 lilv_world_get_plugin_classes(const LilvWorld* world)
 {
 	return world->plugin_classes;
 }
 
-LILV_API const LilvPlugins*
+const LilvPlugins*
 lilv_world_get_all_plugins(const LilvWorld* world)
 {
 	return world->plugins;
 }
 
-LILV_API LilvNode*
+LilvNode*
 lilv_world_get_symbol(LilvWorld* world, const LilvNode* subject)
 {
 	// Check for explicitly given symbol

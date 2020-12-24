@@ -26,7 +26,6 @@
 
 #include <stdarg.h>
 #include <stdbool.h>
-#include <stddef.h>
 #include <stdint.h>
 #include <stdio.h>
 
@@ -55,6 +54,10 @@
 
 #ifdef __cplusplus
 extern "C" {
+#    if defined(__clang__)
+#        pragma clang diagnostic push
+#        pragma clang diagnostic ignored "-Wzero-as-null-pointer-constant"
+#    endif
 #endif
 
 #define LILV_NS_DOAP "http://usefulinc.com/ns/doap#"
@@ -76,6 +79,8 @@ extern "C" {
 #define LILV_URI_OUTPUT_PORT  "http://lv2plug.in/ns/lv2core#OutputPort"
 #define LILV_URI_PORT         "http://lv2plug.in/ns/lv2core#Port"
 
+struct LilvInstanceImpl;
+
 typedef struct LilvPluginImpl      LilvPlugin;       /**< LV2 Plugin. */
 typedef struct LilvPluginClassImpl LilvPluginClass;  /**< Plugin Class. */
 typedef struct LilvPortImpl        LilvPort;         /**< Port. */
@@ -95,10 +100,11 @@ typedef void LilvNodes;          /**< set<Node>. */
 
 /**
    @defgroup lilv Lilv
-   Lilv is a simple yet powerful C API for using LV2 plugins.
 
-   For more information about LV2, see <http://lv2plug.in>.
-   For more information about Lilv, see <http://drobilla.net/software/lilv>.
+   A library for discovering and using LV2 plugins.
+
+   For more information about LV2, see <http://lv2plug.in/>.
+
    @{
 */
 
@@ -1327,18 +1333,25 @@ typedef const void* (*LilvGetPortValueFunc)(const char* port_symbol,
    explicitly disallows this.
 
    To support advanced file functionality, there are several directory
-   parameters.  Simple hosts that only wish to save a single plugins state once
-   may simply use the same directory for all of them (or pass NULL to not
-   support files at all).  The multiple parameters are necessary to support
-   saving an instances state many times while avoiding any duplication of data.
+   parameters.  The multiple parameters are necessary to support saving an
+   instance's state many times, or saving states from multiple instances, while
+   avoiding any duplication of data.  For example, a host could pass the same
+   `copy_dir` and `link_dir` for all plugins in a session (for example
+   `session/shared/copy/` `session/shared/link/`), while the `save_dir` would
+   be unique to each plugin instance (for example `session/states/state1.lv2`
+   for one instance and `session/states/state2.lv2` for another instance).
+   Simple hosts that only wish to save a single plugin's state once may simply
+   use the same directory for all of them, or pass NULL to not support files at
+   all.
 
    If supported (via state:makePath passed to LV2_Descriptor::instantiate()),
    `scratch_dir` should be the directory where any files created by the plugin
-   (not during save time, e.g. during instantiation) are stored.  These files
-   will be copied to preserve their state at this time.plugin-created files are
-   stored.  Lilv will assume any files within this directory (recursively) are
-   created by the plugin and all other files are immutable.  Note that this
-   function does not save the state, use lilv_state_save() for that.
+   (for example during instantiation or while running) are stored.  Any files
+   here that are referred to in the state will be copied to preserve their
+   contents at the time of the save.  Lilv will assume any files within this
+   directory (recursively) are created by the plugin and that all other files
+   are immutable.  Note that this function does not completely save the state,
+   use lilv_state_save() for that.
 
    See <a href="http://lv2plug.in/ns/ext/state/state.h">state.h</a> from the
    LV2 State extension for details on the `flags` and `features` parameters.
@@ -1847,6 +1860,9 @@ lilv_ui_get_binary_uri(const LilvUI* ui);
 */
 
 #ifdef __cplusplus
+#    if defined(__clang__)
+#        pragma clang diagnostic pop
+#    endif
 } /* extern "C" */
 #endif
 

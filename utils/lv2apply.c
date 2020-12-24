@@ -27,6 +27,12 @@
 #include <stdlib.h>
 #include <string.h>
 
+#if defined(__GNUC__)
+#    define LILV_LOG_FUNC(fmt, arg1) __attribute__((format(printf, fmt, arg1)))
+#else
+#    define LILV_LOG_FUNC(fmt, arg1)
+#endif
+
 /** Control port value set from the command line */
 typedef struct Param {
 	const char* sym;    ///< Port symbol
@@ -85,7 +91,7 @@ sopen(LV2Apply* self, const char* path, int mode, SF_INFO* fmt)
 static void
 sclose(const char* path, SNDFILE* file)
 {
-	int st;
+	int st = 0;
 	if (file && (st = sf_close(file))) {
 		fatal(NULL, 1, "Failed to close %s (%s)\n", path, sf_error_number(st));
 	}
@@ -121,6 +127,7 @@ cleanup(int status, LV2Apply* self)
 }
 
 /** Print a fatal error and clean up for exit. */
+LILV_LOG_FUNC(3, 4)
 static int
 fatal(LV2Apply* self, int status, const char* fmt, ...)
 {
@@ -169,7 +176,7 @@ create_ports(LV2Apply* self)
 			port->is_input = true;
 		} else if (!lilv_port_is_a(self->plugin, lport, lv2_OutputPort) &&
 		           !port->optional) {
-			return fatal(self, 1, "Port %d is neither input nor output\n", i);
+			return fatal(self, 1, "Port %u is neither input nor output\n", i);
 		}
 
 		/* Check if port is an audio or control port */
@@ -183,7 +190,7 @@ create_ports(LV2Apply* self)
 				++self->n_audio_out;
 			}
 		} else if (!port->optional) {
-			return fatal(self, 1, "Port %d has unsupported type\n", i);
+			return fatal(self, 1, "Port %u has unsupported type\n", i);
 		}
 	}
 
@@ -296,7 +303,7 @@ main(int argc, char** argv)
 
 	if (self.n_audio_in == 0 ||
 	    (in_fmt.channels != (int)self.n_audio_in && in_fmt.channels != 1)) {
-		return fatal(&self, 6, "Unable to map %d inputs to %d ports\n",
+		return fatal(&self, 6, "Unable to map %d inputs to %u ports\n",
 		             in_fmt.channels, self.n_audio_in);
 	}
 
@@ -317,13 +324,14 @@ main(int argc, char** argv)
 	SF_INFO out_fmt = in_fmt;
 	out_fmt.channels = self.n_audio_out;
 	if (!(self.out_file = sopen(&self, self.out_path, SFM_WRITE, &out_fmt))) {
+		free(self.ports);
 		return 8;
 	}
 
 	/* Instantiate plugin and connect ports */
 	const uint32_t n_ports = lilv_plugin_get_num_ports(plugin);
-	float          in_buf[self.n_audio_in];
-	float          out_buf[self.n_audio_out];
+	float          in_buf[self.n_audio_in > 0 ? self.n_audio_in : 1];
+	float          out_buf[self.n_audio_out > 0 ? self.n_audio_out : 1];
 	self.instance = lilv_plugin_instantiate(
 		self.plugin, in_fmt.samplerate, NULL);
 	for (uint32_t p = 0, i = 0, o = 0; p < n_ports; ++p) {

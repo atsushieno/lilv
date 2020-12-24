@@ -29,14 +29,14 @@
 #include <stdlib.h>
 #include <string.h>
 
-LilvNode* applies_to_pred     = NULL;
-LilvNode* control_class       = NULL;
-LilvNode* event_class         = NULL;
-LilvNode* group_pred          = NULL;
-LilvNode* label_pred          = NULL;
-LilvNode* preset_class        = NULL;
-LilvNode* designation_pred    = NULL;
-LilvNode* supports_event_pred = NULL;
+static LilvNode* applies_to_pred     = NULL;
+static LilvNode* control_class       = NULL;
+static LilvNode* event_class         = NULL;
+static LilvNode* group_pred          = NULL;
+static LilvNode* label_pred          = NULL;
+static LilvNode* preset_class        = NULL;
+static LilvNode* designation_pred    = NULL;
+static LilvNode* supports_event_pred = NULL;
 
 static void
 print_port(const LilvPlugin* p,
@@ -47,7 +47,7 @@ print_port(const LilvPlugin* p,
 {
 	const LilvPort* port = lilv_plugin_get_port_by_index(p, index);
 
-	printf("\n\tPort %d:\n", index);
+	printf("\n\tPort %u:\n", index);
 
 	if (!port) {
 		printf("\t\tERROR: Illegal/nonexistent port\n");
@@ -183,7 +183,7 @@ print_plugin(LilvWorld*        world,
 
 	if (lilv_plugin_has_latency(p)) {
 		uint32_t latency_port = lilv_plugin_get_latency_port_index(p);
-		printf("\tHas latency:       yes, reported by port %d\n", latency_port);
+		printf("\tHas latency:       yes, reported by port %u\n", latency_port);
 	} else {
 		printf("\tHas latency:       no\n");
 	}

@@ -1,18 +1,18 @@
 #!/usr/bin/env python
 
+import glob
 import os
 import shutil
-import subprocess
 import sys
 
-from waflib import Options, Logs
+from waflib import Build, Options, Logs
 from waflib.extras import autowaf
 
 # Library and package version (UNIX style major, minor, micro)
 # major increment <=> incompatible changes
 # minor increment <=> compatible changes (additions)
 # micro increment <=> no interface changes
-LILV_VERSION       = '0.24.7'
+LILV_VERSION       = '0.24.11'
 LILV_MAJOR_VERSION = '0'
 
 # Mandatory waf variables
@@ -25,6 +25,32 @@ out     = 'build'       # Build directory
 uri          = 'http://drobilla.net/sw/lilv'
 dist_pattern = 'http://download.drobilla.net/lilv-%d.%d.%d.tar.bz2'
 post_tags    = ['Hacking', 'LAD', 'LV2', 'Lilv']
+
+tests = [
+    'test_bad_port_index',
+    'test_bad_port_symbol',
+    'test_classes',
+    'test_discovery',
+    'test_filesystem',
+    'test_get_symbol',
+    'test_no_author',
+    'test_no_verify',
+    'test_plugin',
+    'test_port',
+    'test_preset',
+    'test_project',
+    'test_project_no_author',
+    'test_prototype',
+    'test_reload_bundle',
+    'test_replace_version',
+    'test_state',
+    'test_string',
+    'test_ui',
+    'test_util',
+    'test_value',
+    'test_verify',
+    'test_world',
+]
 
 test_plugins = [
     'bad_syntax',
@@ -39,6 +65,7 @@ test_plugins = [
     'new_version',
     'old_version'
 ]
+
 
 def options(ctx):
     ctx.load('compiler_c')
@@ -59,21 +86,22 @@ def options(ctx):
                    dest='default_lv2_path',
                    help='default LV2 path to use if LV2_PATH is unset')
 
+
 def configure(conf):
     conf.load('compiler_c', cache=True)
     try:
         conf.load('compiler_cxx', cache=True)
         conf.define('LILV_CXX', True)
-    except:
+    except Exception:
         pass
 
     if not Options.options.no_bindings:
         try:
             conf.load('python', cache=True)
-            conf.check_python_version((2,6,0))
+            conf.check_python_version((2, 6, 0))
             conf.env.LILV_PYTHON = 1
-        except:
-            Logs.warn('Failed to configure Python (%s)\n' % sys.exc_info()[1])
+        except Exception as e:
+            Logs.warn('Failed to configure Python (%s)\n' % e)
 
     conf.load('autowaf', cache=True)
     #autowaf.set_c_lang(conf, 'c99')
@@ -88,7 +116,73 @@ def configure(conf):
     if not conf.env.BUILD_SHARED and not conf.env.BUILD_STATIC:
         conf.fatal('Neither a shared nor a static build requested')
 
-    conf.check_pkg('lv2 >= 1.17.0', uselib_store='LV2')
+    if Options.options.strict:
+        # Check for programs used by lint target
+        conf.find_program("flake8", var="FLAKE8", mandatory=False)
+        conf.find_program("clang-tidy", var="CLANG_TIDY", mandatory=False)
+        conf.find_program("iwyu_tool", var="IWYU_TOOL", mandatory=False)
+
+    if Options.options.ultra_strict:
+        autowaf.add_compiler_flags(conf.env, '*', {
+            'clang': [
+                '-Wno-documentation-unknown-command',
+                '-Wno-nullability-extension',
+            ]
+        })
+
+        autowaf.add_compiler_flags(conf.env, 'c', {
+            'clang': [
+                '-Wno-cast-align',
+                '-Wno-cast-qual',
+                '-Wno-double-promotion',
+                '-Wno-float-equal',
+                '-Wno-format-nonliteral',
+                '-Wno-implicit-float-conversion',
+                '-Wno-implicit-int-conversion',
+                '-Wno-padded',
+                '-Wno-reserved-id-macro',
+                '-Wno-shorten-64-to-32',
+                '-Wno-sign-conversion',
+                '-Wno-switch-enum',
+                '-Wno-unused-parameter',
+                '-Wno-vla',
+            ],
+            'gcc': [
+                '-Wno-cast-align',
+                '-Wno-cast-qual',
+                '-Wno-conversion',
+                '-Wno-double-promotion',
+                '-Wno-float-equal',
+                '-Wno-padded',
+                '-Wno-stack-protector',
+                '-Wno-suggest-attribute=const',
+                '-Wno-suggest-attribute=pure',
+                '-Wno-switch-enum',
+                '-Wno-unused-parameter',
+                '-Wno-vla',
+            ],
+            'msvc': [
+                '/wd4061',  # enumerator in switch is not explicitly handled
+                '/wd4365',  # signed/unsigned mismatch
+                '/wd4514',  # unreferenced inline function has been removed
+                '/wd4774',  # format string is not a string literal
+                '/wd4820',  # padding added after construct
+                '/wd4996',  # POSIX name for this item is deprecated
+            ],
+        })
+
+        autowaf.add_compiler_flags(conf.env, 'cxx', {
+            'clang': [
+                '-Wno-extra-semi',
+            ],
+            'gcc': [
+                '-Wno-effc++',
+                '-Wno-extra-semi',
+                '-Wno-pedantic',
+            ],
+        })
+
+    conf.check_pkg('lv2 >= 1.18.0', uselib_store='LV2')
     conf.check_pkg('serd-0 >= 0.30.0', uselib_store='SERD')
     conf.check_pkg('sord-0 >= 0.14.0', uselib_store='SORD')
     conf.check_pkg('sratom-0 >= 0.4.0', uselib_store='SRATOM')
@@ -106,26 +200,34 @@ def configure(conf):
                         header_name = ['sys/stat.h'],
                         defines     = defines,
                         define_name = 'HAVE_LSTAT',
+                        return_type = 'int',
+                        arg_types   = 'const char*, struct stat*',
                         mandatory   = False)
 
     conf.check_function('c', 'flock',
                         header_name = 'sys/file.h',
                         defines     = defines,
                         define_name = 'HAVE_FLOCK',
+                        return_type = 'int',
+                        arg_types   = 'int, int',
                         mandatory   = False)
 
     conf.check_function('c', 'fileno',
                         header_name = 'stdio.h',
                         defines     = defines,
                         define_name = 'HAVE_FILENO',
+                        return_type = 'int',
+                        arg_types   = 'FILE*',
                         mandatory   = False)
 
     conf.check_function('c', 'clock_gettime',
-                        header_name  = ['sys/time.h','time.h'],
+                        header_name  = ['sys/time.h', 'time.h'],
                         defines      = ['_POSIX_C_SOURCE=200809L'],
                         define_name  = 'HAVE_CLOCK_GETTIME',
                         uselib_store = 'CLOCK_GETTIME',
                         lib          = rt_lib,
+                        return_type  = 'int',
+                        arg_types    = 'clockid_t, struct timespec*',
                         mandatory    = False)
 
     conf.check_cc(define_name = 'HAVE_LIBDL',
@@ -179,6 +281,7 @@ def configure(conf):
          'Dynamic manifest support': conf.is_defined('LILV_DYN_MANIFEST'),
          'Python bindings':          bool(conf.env.LILV_PYTHON)})
 
+
 def build_util(bld, name, defines, libs=''):
     obj = bld(features     = 'c cprogram',
               source       = name + '.c',
@@ -197,6 +300,7 @@ def build_util(bld, name, defines, libs=''):
             obj.linkflags        = ['-static', '-Wl,--start-group']
     return obj
 
+
 def build(bld):
     # C/C++ Headers
     includedir = '${INCLUDEDIR}/lilv-%s/lilv' % LILV_MAJOR_VERSION
@@ -205,6 +309,7 @@ def build(bld):
 
     lib_source = '''
         src/collections.c
+        src/filesystem.c
         src/instance.c
         src/lib.c
         src/node.c
@@ -233,9 +338,9 @@ def build(bld):
 
     # Pkgconfig file
     autowaf.build_pc(bld, 'LILV', LILV_VERSION, LILV_MAJOR_VERSION, [],
-                     {'LILV_MAJOR_VERSION' : LILV_MAJOR_VERSION,
-                      'LILV_PKG_DEPS'      : 'lv2 serd-0 sord-0 sratom-0',
-                      'LILV_PKG_LIBS'      : ' -l'.join([''] + lib)})
+                     {'LILV_MAJOR_VERSION': LILV_MAJOR_VERSION,
+                      'LILV_PKG_DEPS': 'lv2 serd-0 sord-0 sratom-0',
+                      'LILV_PKG_LIBS': ' -l'.join([''] + lib)})
 
     # Shared Library
     if bld.env.BUILD_SHARED:
@@ -326,13 +431,13 @@ def build(bld):
 
         # Test plugin data files
         for p in ['test'] + test_plugins:
-            for i in [ 'manifest.ttl.in', p + '.ttl.in' ]:
+            for i in ['manifest.ttl.in', p + '.ttl.in']:
                 bundle = 'test/%s.lv2/' % p
                 bld(features     = 'subst',
                     source       = bundle + i,
                     target       = bundle + i.replace('.in', ''),
                     install_path = None,
-                SHLIB_EXT    = shlib_ext)
+                    SHLIB_EXT    = shlib_ext)
 
         # Static profiled library (for unit test code coverage)
         obj = bld(features     = 'c cstlib',
@@ -352,18 +457,21 @@ def build(bld):
         bpath   = os.path.join(testdir, 'test.lv2')
         bpath   = bpath.replace('\\', '/')
         testdir = testdir.replace('\\', '/')
-        obj = bld(features     = 'c cprogram',
-                  source       = 'test/lilv_test.c',
-                  includes     = ['.', './src'],
-                  use          = 'liblilv_profiled',
-                  lib          = test_libs,
-                  uselib       = 'SERD SORD SRATOM LV2',
-                  target       = 'test/lilv_test',
-                  install_path = None,
-                  defines      = (defines + ['LILV_TEST_BUNDLE=\"%s/\"' % bpath] +
-                                  ['LILV_TEST_DIR=\"%s/\"' % testdir]),
-                  cflags       = test_cflags,
-                  linkflags    = test_linkflags)
+        for test in tests:
+            obj = bld(features     = 'c cprogram',
+                      source       = ['test/%s.c' % test,
+                                      'test/lilv_test_utils.c'],
+                      includes     = ['.', './src'],
+                      use          = 'liblilv_profiled',
+                      lib          = test_libs,
+                      uselib       = 'SERD SORD SRATOM LV2',
+                      target       = 'test/' + test,
+                      install_path = None,
+                      defines      = (defines +
+                                      ['LILV_TEST_BUNDLE=\"%s/\"' % bpath] +
+                                      ['LILV_TEST_DIR=\"%s/\"' % testdir]),
+                      cflags       = test_cflags,
+                      linkflags    = test_linkflags)
 
         # C++ API test
         if 'COMPILER_CXX' in bld.env:
@@ -379,8 +487,10 @@ def build(bld):
                       linkflags    = test_linkflags)
 
         if bld.env.LILV_PYTHON:
+            test_bundle = 'bindings/bindings_test_plugin.lv2/'
+
             # Copy Python unittest files
-            for i in [ 'test_api.py' ]:
+            for i in ['test_api.py']:
                 bld(features     = 'subst',
                     is_copy      = True,
                     source       = 'bindings/test/python/' + i,
@@ -391,7 +501,7 @@ def build(bld):
             obj = bld(features     = 'c cshlib',
                       source       = 'bindings/test/bindings_test_plugin.c',
                       name         = 'bindings_test_plugin',
-                      target       = 'bindings/bindings_test_plugin.lv2/bindings_test_plugin',
+                      target       = test_bundle + '/bindings_test_plugin',
                       install_path = None,
                       defines      = defines,
                       cflags       = test_cflags,
@@ -401,13 +511,12 @@ def build(bld):
             obj.env.cshlib_PATTERN = module_pattern
 
             # Bindings test plugin data files
-            for i in [ 'manifest.ttl.in', 'bindings_test_plugin.ttl.in' ]:
+            for i in ['manifest.ttl.in', 'bindings_test_plugin.ttl.in']:
                 bld(features     = 'subst',
                     source       = 'bindings/test/' + i,
-                    target       = 'bindings/bindings_test_plugin.lv2/' + i.replace('.in', ''),
+                    target       = test_bundle + i.replace('.in', ''),
                     install_path = None,
                     SHLIB_EXT    = shlib_ext)
-
 
     # Utilities
     if bld.env.BUILD_UTILS:
@@ -438,14 +547,17 @@ def build(bld):
 
     # Bash completion
     if bld.env.BASH_COMPLETION:
-        bld.install_as(
-            '${SYSCONFDIR}/bash_completion.d/lilv', 'utils/lilv.bash_completion')
+        bld.install_as('${SYSCONFDIR}/bash_completion.d/lilv',
+                       'utils/lilv.bash_completion')
 
     bld.add_post_fun(autowaf.run_ldconfig)
 
+
 def test(tst):
     with tst.group('unit') as check:
-        check(['./test/lilv_test'])
+        for test in tests:
+            check(['./test/' + test])
+
         if tst.is_defined('LILV_CXX'):
             check(['./test/lilv_cxx_test'])
 
@@ -461,18 +573,53 @@ def test(tst):
 
     try:
         shutil.rmtree('state')
-    except:
+    except Exception:
         pass
+
+
+class LintContext(Build.BuildContext):
+    fun = cmd = 'lint'
+
 
 def lint(ctx):
     "checks code for style issues"
     import subprocess
-    cmd = ("clang-tidy -p=. -header-filter=.* -checks=\"*," +
-           "-clang-analyzer-alpha.*," +
-           "-google-readability-todo," +
-           "-llvm-header-guard," +
-           "-llvm-include-order," +
-           "-misc-unused-parameters," +
-           "-readability-else-after-return\" " +
-           "$(find .. -name '*.c')")
-    subprocess.call(cmd, cwd='build', shell=True)
+
+    st = 0
+
+    if "FLAKE8" in ctx.env:
+        Logs.info("Running flake8")
+        st = subprocess.call([ctx.env.FLAKE8[0],
+                              "wscript",
+                              "--ignore",
+                              "E101,E129,W191,E221,W504,E251,E241,E741"])
+    else:
+        Logs.warn("Not running flake8")
+
+    if "IWYU_TOOL" in ctx.env:
+        Logs.info("Running include-what-you-use")
+        cmd = [ctx.env.IWYU_TOOL[0], "-o", "clang", "-p", "build"]
+        output = subprocess.check_output(cmd).decode('utf-8')
+        if 'error: ' in output:
+            sys.stdout.write(output)
+            st += 1
+    else:
+        Logs.warn("Not running include-what-you-use")
+
+    if "CLANG_TIDY" in ctx.env and "clang" in ctx.env.CC[0]:
+        Logs.info("Running clang-tidy")
+        sources = glob.glob('src/*.c') + glob.glob('tests/*.c')
+        sources = list(map(os.path.abspath, sources))
+        procs = []
+        for source in sources:
+            cmd = [ctx.env.CLANG_TIDY[0], "--quiet", "-p=.", source]
+            procs += [subprocess.Popen(cmd, cwd="build")]
+
+        for proc in procs:
+            stdout, stderr = proc.communicate()
+            st += proc.returncode
+    else:
+        Logs.warn("Not running clang-tidy")
+
+    if st != 0:
+        sys.exit(st)

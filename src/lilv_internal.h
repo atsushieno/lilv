@@ -21,18 +21,18 @@
 extern "C" {
 #endif
 
-#include "lilv_config.h"
+#include "lilv_config.h" // IWYU pragma: keep
 
 #include "lilv/lilv.h"
+#include "lv2/core/lv2.h"
 #include "serd/serd.h"
 #include "sord/sord.h"
 #include "zix/tree.h"
 #include "abstract_io.h"
 
-#include <float.h>
-#include <stddef.h>
+#include <stdbool.h>
 #include <stdint.h>
-#include <stdlib.h>
+#include <stdio.h>
 
 #ifdef _WIN32
 #    include <windows.h>
@@ -40,8 +40,6 @@ extern "C" {
 #    include <stdio.h>
 #    define dlopen(path, flags) LoadLibrary(path)
 #    define dlclose(lib)        FreeLibrary((HMODULE)lib)
-#    define unlink(path)        _unlink(path)
-#    define rmdir(path)         _rmdir(path)
 #    ifdef _MSC_VER
 #        define __func__ __FUNCTION__
 #        ifndef snprintf
@@ -57,7 +55,6 @@ extern "C" {
 static inline const char* dlerror(void) { return "Unknown error"; }
 #else
 #    include <dlfcn.h>
-#    include <unistd.h>
 #endif
 
 #ifdef LILV_DYN_MANIFEST
@@ -70,8 +67,6 @@ static inline const char* dlerror(void) { return "Unknown error"; }
  *
  */
 
-typedef struct LilvSpecImpl LilvSpec;
-
 typedef void LilvCollection;
 
 struct LilvPortImpl {
@@ -81,12 +76,12 @@ struct LilvPortImpl {
 	LilvNodes* classes;  ///< rdf:type
 };
 
-struct LilvSpecImpl {
+typedef struct LilvSpecImpl {
 	SordNode*            spec;
 	SordNode*            bundle;
 	LilvNodes*           data_uris;
 	struct LilvSpecImpl* next;
-};
+} LilvSpec;
 
 /**
    Header of an LilvPlugin, LilvPluginClass, or LilvUI.
@@ -382,30 +377,12 @@ char*  lilv_strjoin(const char* first, ...);
 char*  lilv_strdup(const char* str);
 char*  lilv_get_lang(void);
 char*  lilv_expand(const char* path);
-char*  lilv_dirname(const char* path);
-int    lilv_copy_file(const char* src, const char* dst);
-bool   lilv_path_exists(const char* path, const void* ignored);
-char*  lilv_path_absolute(const char* path);
-bool   lilv_path_is_absolute(const char* path);
 char*  lilv_get_latest_copy(const char* path, const char* copy_path);
-char*  lilv_path_relative_to(const char* path, const char* base);
-bool   lilv_path_is_child(const char* path, const char* dir);
-int    lilv_flock(FILE* file, bool lock);
-char*  lilv_realpath(const char* path);
-int    lilv_symlink(const char* oldpath, const char* newpath);
-int    lilv_mkdir_p(const char* dir_path);
-char*  lilv_path_join(const char* a, const char* b);
-bool   lilv_file_equals(const char* a_path, const char* b_path);
 
 char*
 lilv_find_free_path(const char* in_path,
                     bool (*exists)(const char*, const void*),
                     const void* user_data);
-
-void
-lilv_dir_for_each(const char* path,
-                  void*       data,
-                  void (*f)(const char* path, const char* name, void* data));
 
 typedef void (*LilvVoidFunc)(void);
 
@@ -424,6 +401,8 @@ lilv_dlfunc(void* handle, const char* symbol)
 
 #ifdef LILV_DYN_MANIFEST
 static const LV2_Feature* const dman_features = { NULL };
+
+void lilv_dynmanifest_free(LilvDynManifest* dynmanifest);
 #endif
 
 #if ANDROID
