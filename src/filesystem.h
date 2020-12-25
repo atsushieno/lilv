@@ -16,6 +16,7 @@
 
 #include <stdbool.h>
 #include <stdio.h>
+#include "abstract_io.h"
 
 /// Return the path to a directory suitable for making temporary files
 char*

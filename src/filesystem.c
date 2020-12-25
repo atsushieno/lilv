@@ -50,6 +50,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "abstract_io.h"
+
 #ifndef PAGE_SIZE
 #    define PAGE_SIZE 4096
 #endif
