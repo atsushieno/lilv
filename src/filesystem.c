@@ -404,15 +404,7 @@ lilv_dir_for_each(const char* path,
 	FindClose(fh);
 	free(pat);
 #else
-	DIR* dir = opendir(path);
-	if (dir) {
-		for (struct dirent* entry = NULL; (entry = readdir(dir));) {
-			if (strcmp(entry->d_name, ".") && strcmp(entry->d_name, "..")) {
-				f(path, entry->d_name, data);
-			}
-		}
-		closedir(dir);
-	}
+	abstract_dir_for_each(path,data,f);
 #endif
 }
 
