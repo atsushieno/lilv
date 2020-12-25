@@ -3,12 +3,15 @@
 #include <android/asset_manager.h>
 #include <android/asset_manager_jni.h>
 #include <android/log.h>
+#include <assert.h>
 #else
 #include <stdio.h>
 #include <dirent.h>
+#include <fcntl.h>
 #endif
 
 #include "abstract_io.h"
+
 
 #if ANDROID
 
@@ -19,7 +22,50 @@ void abstract_set_io_context (void* ioContext)
 	current_asset_manager = (AAssetManager*) ioContext;
 }
 
+/* serd-specific (at least it used to be, not sure by now) */
 
+void* abstract_fopen(const char* path, const char* mode)
+{
+	void *ret = AAssetManager_open(current_asset_manager, path [0] == '/' ? path + 1 : path, AASSET_MODE_RANDOM);
+	return ret;
+}
+
+int abstract_fread(void *ptr, size_t size, size_t count, void* stream)
+{
+	return AAsset_read((AAsset*) stream, ptr, size * count) / (int) size;
+}
+
+int abstract_fwrite(const void *ptr, size_t size, size_t count, void* stream)
+{
+	puts (NULL); /* damn "undefined reference to assert()" - just cause SIGSEGV then. */
+}
+
+int abstract_error_vfprintf (const char *format, va_list arg)
+{
+    return vfprintf (stderr, format, arg);
+}
+
+int abstract_ferror (void* stream)
+{
+	/* not much we can do here */
+	return ferror((FILE*) stream);
+}
+
+int abstract_fclose (void* stream)
+{
+	AAsset_close((AAsset*) stream);
+	return 0;
+}
+
+int abstract_getc (void* stream)
+{
+	char buf[1];
+	if (AAsset_read(stream, &buf, 1) <= 0)
+		return -1;
+	return buf [0];
+}
+
+/* lilv-specific (at least it used to be, not sure by now) */
 
 int abstract_ftell(void *stream)
 {
@@ -58,15 +104,50 @@ void abstract_dir_for_each(const char* path,
 	#endif
 }
 
-
 #else
-
 
 void abstract_set_io_context (void* ioContext)
 {
 }
 
+/* serd-specific (at least it used to be, not sure by now) */
 
+void* abstract_fopen(const char* path, const char* mode)
+{
+    return fopen(path, mode);
+}
+
+int abstract_fread(void *ptr, size_t size, size_t count, void* stream)
+{
+    return fread(ptr, size, count, stream);
+}
+
+int abstract_fwrite(const void *ptr, size_t size, size_t count, void* stream)
+{
+    return fwrite(ptr, size, count, stream);
+}
+
+int abstract_error_vfprintf (const char *format, va_list arg)
+{
+    return vfprintf (stderr, format, arg);
+}
+
+int abstract_ferror (void* stream)
+{
+    return ferror (stream);
+}
+
+int abstract_fclose (void* stream)
+{
+    return fclose (stream);
+}
+
+int abstract_getc (void* stream)
+{
+    return getc (stream);
+}
+
+/* lilv-specific (at least it used to be, not sure by now) */
 
 int abstract_ftell(void *stream)
 {
@@ -93,3 +174,10 @@ void abstract_dir_for_each(const char* path,
 }
 
 #endif
+
+int abstract_error_fprintf (const char *format, ...)
+{
+    va_list ap;
+    va_start (ap, format);
+    return abstract_error_vfprintf (format, ap);
+}
